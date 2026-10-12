@@ -75,12 +75,12 @@ CALL apoc.create.relationship(s, edge.type, edge.properties, t) YIELD rel
 RETURN count(rel)
 """
 
-# Native fallback for edge creation without APOC
+# Native edge creation
 CYPHER_CREATE_EDGE_TEMPLATE = """
 UNWIND $batch AS edge
 MATCH (s {{id: edge.source_id}})
 MATCH (t {{id: edge.target_id}})
-MERGE (s)-[r:{rel_type}]->(t)
+CREATE (s)-[r:{rel_type}]->(t)
 SET r += edge.properties
 """
 
