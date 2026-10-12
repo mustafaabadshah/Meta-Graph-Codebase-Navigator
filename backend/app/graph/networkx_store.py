@@ -543,6 +543,8 @@ class NetworkXStore(BaseGraphStore):
             allowed_edge_types = {"IMPORTS"}
         elif view_mode == "hierarchy":
             allowed_edge_types = {"CONTAINS", "DEFINES"}
+        elif view_mode in ("diff", "changes"):
+            allowed_edge_types = None
 
         for u, v, k, d in self.graph.edges(keys=True, data=True):
             rel_type = d.get("type")

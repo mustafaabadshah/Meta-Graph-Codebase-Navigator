@@ -71,6 +71,7 @@ export interface GraphNode {
   is_method?: boolean;
   parameters?: string[];
   repo_id?: string;
+  diff_status?: 'added' | 'modified' | 'unchanged';
 }
 
 export interface GraphEdge {
@@ -83,6 +84,7 @@ export interface GraphEdge {
 export interface SubgraphData {
   nodes: GraphNode[];
   edges: GraphEdge[];
+  diff_summary?: GraphDiffSummary;
 }
 
 export interface Citation {

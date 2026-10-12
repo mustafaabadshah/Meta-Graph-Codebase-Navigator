@@ -22,10 +22,12 @@ class SymbolResponse(BaseModel):
     parameters: Optional[List[str]] = None
     raises: Optional[List[str]] = None
     handles: Optional[List[str]] = None
+    diff_status: Optional[str] = None
 
 class GraphSubgraphResponse(BaseModel):
     nodes: List[Dict[str, Any]]
     edges: List[Dict[str, Any]]
+    diff_summary: Optional[Dict[str, Any]] = None
 
 class PathTraceResponse(BaseModel):
     source_id: str

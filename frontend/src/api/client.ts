@@ -69,8 +69,15 @@ export const api = {
     request<GraphStatistics>(`/repositories/${repoId}/statistics`),
 
   // Graph Exploration
-  getGraph: (repoId: string, depth = 2, limit = 80, viewMode = 'architecture', focus?: string) => {
-    let url = `/repositories/${repoId}/graph?depth=${depth}&limit=${limit}&view_mode=${encodeURIComponent(viewMode)}`;
+  getGraph: (
+    repoId: string,
+    depth = 2,
+    limit = 80,
+    viewMode = 'architecture',
+    focus?: string,
+    diffFilter: 'all' | 'changes' | 'added' | 'modified' = 'all'
+  ) => {
+    let url = `/repositories/${repoId}/graph?depth=${depth}&limit=${limit}&view_mode=${encodeURIComponent(viewMode)}&diff_filter=${encodeURIComponent(diffFilter)}`;
     if (focus) url += `&focus=${encodeURIComponent(focus)}`;
     return request<SubgraphData>(url);
   },

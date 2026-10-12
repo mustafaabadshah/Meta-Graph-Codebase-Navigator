@@ -54,11 +54,13 @@
   6. `ValidateCitations`: Verifying that cited files, symbols, and line ranges exist on disk with SHA-256 validation.
 - **Groq LPU LLM Acceleration**: Powered by Groq's high-speed inference (`qwen/qwen3.8-27b`, `openai/gpt-oss-20b`), featuring exponential backoff, rate-limit (429) jitter handling, and token quota budgeting.
 - **Auditable Source Citations**: Every citation provides verified repository-relative paths, symbol names, line ranges, and SHA-256 file hashes. Clickable citations in the UI immediately navigate to the exact source lines.
-- **Curated Graph Explorer Views**:
+- **Curated Graph Explorer Views & Change Inspection**:
   - **Architecture View**: Filters to functional core (`CALLS`, `INHERITS`, `DEFINES`).
   - **Modules View**: Displays inter-module dependencies and imports topology (`IMPORTS`).
   - **Hierarchy View**: Shows repository containment hierarchy (`CONTAINS`, `DEFINES`).
+  - **Changes (Diff) View**: Focuses on newly added and modified symbols (`+ NEW`, `~ MOD`).
   - **All View**: Complete unfiltered AST graph.
+  - **Interactive Diff Filter & Badges**: Switch between `All Nodes`, `✨ All Changes`, `+ New Additions`, and `~ Modified Only` with real-time counts, emerald/amber glowing card borders, and node inspector diff provenance.
 - **Strict Target Repository Safety**: Analyzed repositories (e.g. `Agent Chess`) are treated as **strictly read-only**. The scanner never modifies, writes to, or deletes target files.
 
 ---

@@ -53,9 +53,11 @@ class GraphDiffEngine:
 
         self.hashes_file = self.cache_dir / f"{repo_id}_hashes.json"
         self.parsed_cache_file = self.cache_dir / f"{repo_id}_parsed.json"
+        self.last_diff_file = self.cache_dir / f"{repo_id}_last_diff.json"
 
         self.cached_hashes: Dict[str, str] = self._load_json(self.hashes_file)
         self.cached_parsed: Dict[str, dict] = self._load_json(self.parsed_cache_file)
+        self.cached_last_diff: Dict[str, Any] = self._load_json(self.last_diff_file)
 
     def _load_json(self, path: Path) -> Dict[str, Any]:
         if path.is_file():
@@ -145,7 +147,12 @@ class GraphDiffEngine:
             logger.warning(f"Failed deserializing cached ParsedFile for {rel_path}: {e}")
             return None
 
-    def save_state(self, parsed_files: List[ParsedFile], current_hashes: Dict[str, str]):
+    def save_state(
+        self,
+        parsed_files: List[ParsedFile],
+        current_hashes: Dict[str, str],
+        diff_result: Optional[GraphDiffResult] = None
+    ):
         """
         Persists updated file hashes and serialized ParsedFiles to disk.
         """
@@ -163,11 +170,41 @@ class GraphDiffEngine:
             with open(self.parsed_cache_file, "w", encoding="utf-8") as f:
                 json.dump(parsed_dump, f)
 
+            # 3. Save last indexing diff summary if provided
+            if diff_result is not None:
+                summary_data = diff_result.to_summary_dict()
+                summary_data["repository_id"] = self.repo_id
+                with open(self.last_diff_file, "w", encoding="utf-8") as f:
+                    json.dump(summary_data, f, indent=2)
+                self.cached_last_diff = summary_data
+
             self.cached_hashes = current_hashes
             self.cached_parsed = parsed_dump
             logger.info(f"GraphDiffEngine saved state for {self.repo_id} ({len(current_hashes)} files cached).")
         except Exception as e:
             logger.error(f"Failed saving GraphDiffEngine state for {self.repo_id}: {e}")
+
+    def get_effective_diff(self, current_files: List[Path]) -> GraphDiffResult:
+        """
+        Returns the current pending diff if changes exist;
+        otherwise falls back to the most recent recorded indexing diff.
+        """
+        diff_result, _, _ = self.compute_diff(current_files, force_full=False)
+        if diff_result.has_changes:
+            return diff_result
+        if self.cached_last_diff and bool(self.cached_last_diff.get("added_files") or self.cached_last_diff.get("modified_files")):
+            return GraphDiffResult(
+                repository_id=self.repo_id,
+                is_incremental=self.cached_last_diff.get("is_incremental", False),
+                has_changes=self.cached_last_diff.get("has_changes", False),
+                added_files=self.cached_last_diff.get("added_files", []),
+                modified_files=self.cached_last_diff.get("modified_files", []),
+                deleted_files=self.cached_last_diff.get("deleted_files", []),
+                unchanged_files=self.cached_last_diff.get("unchanged_files", []),
+                total_files=len(current_files),
+                summary_text=self.cached_last_diff.get("summary_text", "")
+            )
+        return diff_result
 
     def clear_cache(self):
         """Purges cache files for full rebuild."""
@@ -176,8 +213,11 @@ class GraphDiffEngine:
                 self.hashes_file.unlink()
             if self.parsed_cache_file.is_file():
                 self.parsed_cache_file.unlink()
+            if self.last_diff_file.is_file():
+                self.last_diff_file.unlink()
             self.cached_hashes = {}
             self.cached_parsed = {}
+            self.cached_last_diff = {}
         except Exception as e:
             logger.warning(f"Failed clearing cache for {self.repo_id}: {e}")
 

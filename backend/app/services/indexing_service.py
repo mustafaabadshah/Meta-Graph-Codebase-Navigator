@@ -39,6 +39,15 @@ class IndexingService:
         diff_result, _, _ = diff_engine.compute_diff(files, force_full=False)
         return GraphDiffSummary(**diff_result.to_summary_dict())
 
+    def get_effective_diff(self, repo_id: str) -> GraphDiffSummary:
+        repo = repository_service.get_repository(repo_id)
+        repo_path = Path(repo.path)
+        scanner = RepositoryScanner(repo_path)
+        files, _ = scanner.scan()
+        diff_engine = GraphDiffEngine(repo_id, repo_path)
+        diff_result = diff_engine.get_effective_diff(files)
+        return GraphDiffSummary(**diff_result.to_summary_dict())
+
     async def start_indexing(self, repo_id: str, is_reindex: bool = False) -> IndexStatusResponse:
         current_job = self._jobs.get(repo_id)
         if current_job and current_job.get("status") == "running":
@@ -150,8 +159,8 @@ class IndexingService:
             else:
                 store.create_or_update_index(graph)
 
-            # 6. Save updated state (hashes and serialized parsed files)
-            diff_engine.save_state(parsed_files, current_hashes)
+            # 6. Save updated state (hashes, serialized parsed files, and diff result)
+            diff_engine.save_state(parsed_files, current_hashes, diff_result=diff_result)
 
             completed_at = datetime.now(timezone.utc).isoformat()
             job["status"] = "completed"
