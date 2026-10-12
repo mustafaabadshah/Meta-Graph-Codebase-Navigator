@@ -1,7 +1,7 @@
 import {
   Repository, ValidationResult, IndexStatus, GraphStatistics,
   SubgraphData, QueryResponse, SourceSnippet, SystemStatus,
-  BenchmarkResult, QueryHistoryItem
+  BenchmarkResult, QueryHistoryItem, GraphDiffSummary
 } from '../types';
 
 const API_BASE = '/api';
@@ -63,6 +63,8 @@ export const api = {
     request<IndexStatus>(`/repositories/${repoId}/reindex`, { method: 'POST' }),
   getIndexStatus: (repoId: string) =>
     request<IndexStatus>(`/repositories/${repoId}/index-status`),
+  getGraphDiff: (repoId: string) =>
+    request<GraphDiffSummary>(`/repositories/${repoId}/diff`),
   getStatistics: (repoId: string) =>
     request<GraphStatistics>(`/repositories/${repoId}/statistics`),
 

@@ -33,6 +33,27 @@ class BaseGraphStore(ABC):
         """Ingests all files, symbols, and relationships into the graph."""
         pass
 
+    def apply_graph_diff(
+        self,
+        repo_id: str,
+        graph: RepositoryGraph,
+        added_files: List[str],
+        modified_files: List[str],
+        deleted_files: List[str]
+    ) -> Dict[str, Any]:
+        """
+        Incrementally updates the graph by only modifying changed entities
+        instead of rebuilding the graph from scratch.
+        Default fallback invokes create_or_update_index.
+        """
+        self.create_or_update_index(graph)
+        return {
+            "status": "full_rebuild",
+            "added_count": len(added_files),
+            "modified_count": len(modified_files),
+            "deleted_count": len(deleted_files)
+        }
+
     @abstractmethod
     def get_graph_statistics(self, repo_id: str) -> Dict[str, Any]:
         """Returns node counts, edge counts, and schema breakdown for a repository."""

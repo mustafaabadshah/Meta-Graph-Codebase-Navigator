@@ -8,8 +8,11 @@ import {
   AlertTriangle,
   Folder,
   Terminal,
+  GitCompare,
+  FileDiff,
+  Zap,
 } from 'lucide-react';
-import { Repository, IndexStatus } from '../../types';
+import { Repository, IndexStatus, GraphDiffSummary } from '../../types';
 import { api } from '../../api/client';
 
 interface RepositoriesPageProps {
@@ -30,6 +33,22 @@ export const RepositoriesPage: React.FC<RepositoriesPageProps> = ({
   const [isRegistering, setIsRegistering] = useState(false);
   const [indexStatus, setIndexStatus] = useState<Record<string, IndexStatus>>({});
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [repoDiffs, setRepoDiffs] = useState<Record<string, GraphDiffSummary>>({});
+  const [inspectingDiff, setInspectingDiff] = useState<string | null>(null);
+  const [loadingDiff, setLoadingDiff] = useState<Record<string, boolean>>({});
+
+  const handleInspectDiff = async (repoId: string) => {
+    try {
+      setLoadingDiff((prev) => ({ ...prev, [repoId]: true }));
+      const diff = await api.getGraphDiff(repoId);
+      setRepoDiffs((prev) => ({ ...prev, [repoId]: diff }));
+      setInspectingDiff((prev) => (prev === repoId ? null : repoId));
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to inspect graph diff');
+    } finally {
+      setLoadingDiff((prev) => ({ ...prev, [repoId]: false }));
+    }
+  };
 
   // Poll status for running indexing jobs
   useEffect(() => {
@@ -273,6 +292,19 @@ export const RepositoriesPage: React.FC<RepositoriesPageProps> = ({
                   </button>
                   <button
                     className="btn-secondary"
+                    onClick={() => handleInspectDiff(repo.id)}
+                    disabled={isRunning || loadingDiff[repo.id]}
+                    title="Inspect Graph Diff (added, modified, deleted files) without indexing"
+                    style={{
+                      borderColor: inspectingDiff === repo.id ? '#06b6d4' : undefined,
+                      color: inspectingDiff === repo.id ? '#38bdf8' : undefined,
+                    }}
+                  >
+                    <GitCompare size={14} />
+                    <span>{loadingDiff[repo.id] ? 'Diffing...' : 'Graph Diff'}</span>
+                  </button>
+                  <button
+                    className="btn-secondary"
                     onClick={() => handleDelete(repo.id)}
                     style={{ color: '#fb7185' }}
                     title="Delete Graph Data"
@@ -355,6 +387,105 @@ export const RepositoriesPage: React.FC<RepositoriesPageProps> = ({
                   </div>
                 )}
               </div>
+
+              {/* Graph Diff Status Badge & Details */}
+              {(() => {
+                const diff = status?.diff || repoDiffs[repo.id];
+                if (!diff && inspectingDiff !== repo.id) return null;
+                const isExpanded = inspectingDiff === repo.id;
+
+                return (
+                  <div
+                    style={{
+                      background: 'rgba(6, 182, 212, 0.05)',
+                      border: '1px solid rgba(6, 182, 212, 0.2)',
+                      borderRadius: '8px',
+                      padding: '12px 16px',
+                      marginTop: '14px',
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        fontSize: '12px',
+                        flexWrap: 'wrap',
+                        gap: '8px',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <FileDiff size={15} color="#06b6d4" />
+                        <span style={{ fontWeight: 600, color: '#f1f5f9' }}>
+                          Graph Diff:
+                        </span>
+                        <span style={{ color: 'var(--text-muted)' }}>
+                          {diff?.summary_text || (diff?.has_changes ? 'Codebase updates detected' : 'Graph fully in sync with codebase')}
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ color: '#10b981', fontWeight: 600 }}>+{diff?.added_count ?? 0} added</span>
+                        <span style={{ color: '#f59e0b', fontWeight: 600 }}>~{diff?.modified_count ?? 0} modified</span>
+                        <span style={{ color: '#f43f5e', fontWeight: 600 }}>-{diff?.deleted_count ?? 0} deleted</span>
+                        <span style={{ color: '#38bdf8', fontWeight: 600 }}>={diff?.unchanged_count ?? 0} unchanged (AST bypassed)</span>
+                        
+                        <button
+                          onClick={() => setInspectingDiff(isExpanded ? null : repo.id)}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#06b6d4',
+                            fontSize: '11px',
+                            cursor: 'pointer',
+                            textDecoration: 'underline',
+                            marginLeft: '6px',
+                          }}
+                        >
+                          {isExpanded ? 'Hide files' : 'View files'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Expandable Changed File List */}
+                    {isExpanded && diff && (
+                      <div
+                        style={{
+                          marginTop: '10px',
+                          paddingTop: '10px',
+                          borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '6px',
+                          fontSize: '11px',
+                          fontFamily: 'var(--font-mono)',
+                        }}
+                      >
+                        {diff.modified_files.map((file) => (
+                          <div key={file} style={{ color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span>~ Modified:</span> <span>{file}</span>
+                          </div>
+                        ))}
+                        {diff.added_files.map((file) => (
+                          <div key={file} style={{ color: '#10b981', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span>+ Added:</span> <span>{file}</span>
+                          </div>
+                        ))}
+                        {diff.deleted_files.map((file) => (
+                          <div key={file} style={{ color: '#f43f5e', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span>- Deleted:</span> <span>{file}</span>
+                          </div>
+                        ))}
+                        {diff.added_count === 0 && diff.modified_count === 0 && diff.deleted_count === 0 && (
+                          <div style={{ color: 'var(--text-dim)', fontStyle: 'italic' }}>
+                            ⚡ All {diff.unchanged_count} files match cached hashes. AST parsing is 100% bypassed on incremental indexing.
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           );
         })}

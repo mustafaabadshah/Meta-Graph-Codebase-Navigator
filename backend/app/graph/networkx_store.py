@@ -143,6 +143,102 @@ class NetworkXStore(BaseGraphStore):
         self._persist_repo(graph.repo_id)
         logger.info(f"Indexed {len(graph.files)} files and {len(graph.edges)} edges in NetworkX for {graph.repo_id}")
 
+    def apply_graph_diff(
+        self,
+        repo_id: str,
+        graph: RepositoryGraph,
+        added_files: List[str],
+        modified_files: List[str],
+        deleted_files: List[str]
+    ) -> Dict[str, Any]:
+        """
+        Incrementally modifies only the nodes and edges belonging to changed files.
+        Unchanged files remain untouched in the in-memory graph.
+        """
+        changed_rels = set(modified_files + deleted_files)
+        repo_node_id = f"repo:{repo_id}"
+
+        # 1. Prune nodes associated with modified and deleted files
+        nodes_to_remove = []
+        for n, d in self.graph.nodes(data=True):
+            if d.get("repo_id") == repo_id:
+                if d.get("rel_path") in changed_rels:
+                    nodes_to_remove.append(n)
+
+        self.graph.remove_nodes_from(nodes_to_remove)
+
+        # 2. Update repository metadata
+        self.register_repository(graph)
+        if not self.graph.has_node(repo_node_id):
+            self.graph.add_node(
+                repo_node_id,
+                id=repo_node_id,
+                type="Repository",
+                repo_id=graph.repo_id,
+                name=graph.repo_name,
+                path=graph.repo_path
+            )
+
+        # 3. Add / Update nodes only for added and modified files
+        target_rels = set(added_files + modified_files)
+        added_node_count = 0
+
+        for f in graph.files:
+            if f.rel_path in target_rels:
+                self.graph.add_node(f.id, type="File", **f.model_dump())
+                self.graph.add_edge(repo_node_id, f.id, type="HAS_FILE")
+                added_node_count += 1
+
+        for m in graph.modules:
+            if m.rel_path in target_rels:
+                self.graph.add_node(m.id, type="Module", **m.model_dump())
+                added_node_count += 1
+
+        for c in graph.classes:
+            if c.rel_path in target_rels:
+                self.graph.add_node(c.id, type="Class", **c.model_dump())
+                added_node_count += 1
+
+        for fn in graph.functions:
+            if fn.rel_path in target_rels:
+                self.graph.add_node(fn.id, type="Function", **fn.model_dump())
+                added_node_count += 1
+
+        for ext in graph.external_symbols:
+            if not self.graph.has_node(ext.id):
+                self.graph.add_node(ext.id, type="ExternalSymbol", **ext.model_dump())
+
+        # 4. Ingest edges that touch the newly added / updated nodes
+        added_edge_count = 0
+        for e in graph.edges:
+            if self.graph.has_node(e.source_id) and self.graph.has_node(e.target_id):
+                edge_line = e.properties.get("line", 0)
+                edge_key = f"{e.type}:{edge_line}"
+                self.graph.add_edge(
+                    e.source_id,
+                    e.target_id,
+                    key=edge_key,
+                    type=e.type,
+                    **e.properties
+                )
+                added_edge_count += 1
+
+        self._persist_repo(repo_id)
+        logger.info(
+            f"Graph Diff applied to NetworkX for {repo_id}: "
+            f"pruned {len(nodes_to_remove)} obsolete nodes, ingested {added_node_count} nodes, "
+            f"current graph size: {self.graph.number_of_nodes()} nodes, {self.graph.number_of_edges()} edges."
+        )
+
+        return {
+            "status": "incremental_applied",
+            "nodes_pruned": len(nodes_to_remove),
+            "nodes_ingested": added_node_count,
+            "edges_ingested": added_edge_count,
+            "total_nodes": self.graph.number_of_nodes(),
+            "total_edges": self.graph.number_of_edges()
+        }
+
     def get_graph_statistics(self, repo_id: str) -> Dict[str, Any]:
         node_counts: Dict[str, int] = {}
         edge_counts: Dict[str, int] = {}

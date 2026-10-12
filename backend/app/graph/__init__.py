@@ -18,7 +18,17 @@ def get_graph_store() -> BaseGraphStore:
     """
     global _active_store, _active_backend_mode, _neo4j_diagnostic, _redis_diagnostic
     if _active_store is not None:
-        return _active_store
+        if _active_backend_mode == "auto":
+            try:
+                diag = _active_store.check_connection()
+                if diag.get("connected", False):
+                    return _active_store
+                logger.warning("Active graph store disconnected in 'auto' mode. Dynamically falling back...")
+                _active_store = None
+            except Exception:
+                _active_store = None
+        else:
+            return _active_store
 
     mode = _active_backend_mode.lower()
 

@@ -20,6 +20,20 @@ export interface ValidationResult {
   message: string;
 }
 
+export interface GraphDiffSummary {
+  is_incremental: boolean;
+  has_changes: boolean;
+  added_count: number;
+  modified_count: number;
+  deleted_count: number;
+  unchanged_count: number;
+  added_files: string[];
+  modified_files: string[];
+  deleted_files: string[];
+  unchanged_files: string[];
+  summary_text?: string;
+}
+
 export interface IndexStatus {
   repository_id: string;
   status: 'idle' | 'running' | 'completed' | 'failed';
@@ -33,6 +47,7 @@ export interface IndexStatus {
   completed_at?: string | null;
   error?: string | null;
   warnings?: string[];
+  diff?: GraphDiffSummary | null;
 }
 
 export interface GraphStatistics {

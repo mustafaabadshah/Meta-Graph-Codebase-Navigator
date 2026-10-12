@@ -191,6 +191,20 @@ class RedisNetworkXStore(NetworkXStore):
         self._persist_to_redis(graph.repo_id)
         redis_cache.clear_pattern(f"mg:cache:{graph.repo_id}:*")
 
+    def apply_graph_diff(
+        self,
+        repo_id: str,
+        graph: RepositoryGraph,
+        added_files: List[str],
+        modified_files: List[str],
+        deleted_files: List[str]
+    ) -> Dict[str, Any]:
+        res = super().apply_graph_diff(repo_id, graph, added_files, modified_files, deleted_files)
+        self._persist_to_redis(repo_id)
+        redis_cache.clear_pattern(f"mg:cache:{repo_id}:*")
+        redis_cache.clear_pattern("mg:cache:subgraph:*")
+        return res
+
     def delete_repository_index(self, repo_id: str) -> None:
         super().delete_repository_index(repo_id)
         if self.is_connected() and self.redis_client:

@@ -239,6 +239,93 @@ class Neo4jStore(BaseGraphStore):
 
         logger.info(f"Ingested index for {graph.repo_id} into Neo4j successfully.")
 
+    def apply_graph_diff(
+        self,
+        repo_id: str,
+        graph: RepositoryGraph,
+        added_files: List[str],
+        modified_files: List[str],
+        deleted_files: List[str]
+    ) -> Dict[str, Any]:
+        """
+        Incrementally modifies Neo4j by only deleting obsolete nodes of modified/deleted files,
+        and merging updated nodes/edges for added/modified files.
+        """
+        self._ensure_connected()
+        self.register_repository(graph)
+
+        changed_rels = list(set(modified_files + deleted_files))
+        target_rels = set(added_files + modified_files)
+        batch_size = 500
+
+        with self.driver.session(database=self.database) as session:
+            # 1. Prune nodes belonging to modified and deleted files
+            if changed_rels:
+                session.run("""
+                MATCH (n {repo_id: $repo_id})
+                WHERE n.rel_path IN $changed_rels
+                DETACH DELETE n
+                """, {"repo_id": repo_id, "changed_rels": changed_rels})
+
+            # 2. Ingest only added and modified files
+            file_dicts = [f.model_dump() for f in graph.files if f.rel_path in target_rels]
+            for i in range(0, len(file_dicts), batch_size):
+                session.run(UNWIND_MERGE_FILES, {"batch": file_dicts[i:i + batch_size]})
+
+            # Connect Repo to new Files
+            if file_dicts:
+                session.run("""
+                MATCH (r:Repository {id: $repo_node_id})
+                MATCH (f:File {repo_id: $repo_id})
+                WHERE f.rel_path IN $target_rels
+                MERGE (r)-[:HAS_FILE]->(f)
+                """, {
+                    "repo_node_id": f"repo:{graph.repo_id}",
+                    "repo_id": graph.repo_id,
+                    "target_rels": list(target_rels)
+                })
+
+            # 3. Ingest Modules
+            mod_dicts = [m.model_dump() for m in graph.modules if m.rel_path in target_rels]
+            for i in range(0, len(mod_dicts), batch_size):
+                session.run(UNWIND_MERGE_MODULES, {"batch": mod_dicts[i:i + batch_size]})
+
+            # 4. Ingest Classes
+            cls_dicts = [c.model_dump() for c in graph.classes if c.rel_path in target_rels]
+            for i in range(0, len(cls_dicts), batch_size):
+                session.run(UNWIND_MERGE_CLASSES, {"batch": cls_dicts[i:i + batch_size]})
+
+            # 5. Ingest Functions
+            fn_dicts = [fn.model_dump() for fn in graph.functions if fn.rel_path in target_rels]
+            for i in range(0, len(fn_dicts), batch_size):
+                session.run(UNWIND_MERGE_FUNCTIONS, {"batch": fn_dicts[i:i + batch_size]})
+
+            # 6. Ingest External Symbols
+            ext_dicts = [e.model_dump() for e in graph.external_symbols]
+            for i in range(0, len(ext_dicts), batch_size):
+                session.run(UNWIND_MERGE_EXTERNAL_SYMBOLS, {"batch": ext_dicts[i:i + batch_size]})
+
+            # 7. Ingest Edges for updated nodes
+            edges_by_type: Dict[str, List[Dict[str, Any]]] = {}
+            for e in graph.edges:
+                edges_by_type.setdefault(e.type, []).append({
+                    "source_id": e.source_id,
+                    "target_id": e.target_id,
+                    "properties": e.properties
+                })
+
+            for etype, edges in edges_by_type.items():
+                query = CYPHER_CREATE_EDGE_TEMPLATE.format(rel_type=etype)
+                for i in range(0, len(edges), batch_size):
+                    session.run(query, {"batch": edges[i:i + batch_size]})
+
+        logger.info(f"Incrementally applied Graph Diff to Neo4j for {repo_id}: {len(file_dicts)} files merged.")
+        return {
+            "status": "incremental_applied",
+            "pruned_files_count": len(changed_rels),
+            "merged_files_count": len(file_dicts)
+        }
+
     def get_graph_statistics(self, repo_id: str) -> Dict[str, Any]:
         self._ensure_connected()
         cypher = """
