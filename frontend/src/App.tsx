@@ -11,7 +11,35 @@ import { Repository, SystemStatus, Citation } from './types';
 import { api } from './api/client';
 
 export const App: React.FC = () => {
-  const [currentTab, setCurrentTab] = useState<NavTab>('overview');
+  const getInitialTab = (): NavTab => {
+    const rawHash = window.location.hash.replace('#', '') as NavTab;
+    const validTabs: NavTab[] = ['overview', 'repositories', 'assistant', 'graph', 'evidence', 'evaluations'];
+    if (validTabs.includes(rawHash)) return rawHash;
+    const params = new URLSearchParams(window.location.search);
+    const rawParam = params.get('tab') as NavTab;
+    if (validTabs.includes(rawParam)) return rawParam;
+    return 'overview';
+  };
+
+  const [currentTab, setCurrentTabState] = useState<NavTab>(getInitialTab);
+
+  const setCurrentTab = (tab: NavTab) => {
+    window.location.hash = tab;
+    setCurrentTabState(tab);
+  };
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      const rawHash = window.location.hash.replace('#', '') as NavTab;
+      const validTabs: NavTab[] = ['overview', 'repositories', 'assistant', 'graph', 'evidence', 'evaluations'];
+      if (validTabs.includes(rawHash)) {
+        setCurrentTabState(rawHash);
+      }
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
   const [repositories, setRepositories] = useState<Repository[]>([]);
   const [activeRepoId, setActiveRepoId] = useState<string>('agent_chess');
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);

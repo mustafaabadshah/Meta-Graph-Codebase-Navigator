@@ -56,6 +56,8 @@
 
 ## 🏛️ System Architecture
 
+![Meta-Graph System Architecture](docs/images/architecture_workflow.jpg)
+
 ```
 Target Repository (Read-Only)
    │
@@ -87,6 +89,18 @@ Target Repository (Read-Only)
 ```
 
 ---
+
+## 🧠 LangGraph Multi-Hop Reasoning & Retrieval Pipeline
+
+![LangGraph Multi-Hop Reasoning Pipeline](docs/images/multihop_reasoning_flow.jpg)
+
+The reasoning engine implements a deterministic state machine orchestrated by **LangGraph**:
+1. **Validate Question**: Evaluates question complexity, guards against prompt injections, and establishes intent.
+2. **Plan Retrieval**: Plans directional graph query hops, seed entities, and candidate search limits.
+3. **Graph Traversal**: Executes bounded Cypher / NetworkX traversals along `CALLS`, `INHERITS`, and `HANDLES` relationships.
+4. **Source Evidence Extraction**: Extracts real source code slices from disk with SHA-256 verification and adaptive windowing.
+5. **Grounded Synthesis**: Prompts Groq LPU LLM with strict grounding guidelines, context token budgeting, and automatic 413 context trimming.
+6. **Citation Verification**: Cross-references every cited file, symbol, and line range against real disk coordinates.
 
 ## 🔍 Verified Grounded Architectural Trace Example
 
