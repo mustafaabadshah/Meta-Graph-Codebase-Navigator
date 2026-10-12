@@ -76,6 +76,17 @@ export const App: React.FC = () => {
 
   const activeRepo = repositories.find((r) => r.id === activeRepoId) || repositories[0];
 
+  const handleSwitchBackend = async (backend: string) => {
+    try {
+      const res = await api.switchGraphBackend(backend);
+      if (res?.system) {
+        setSystemStatus(res.system);
+      }
+    } catch (err) {
+      console.error('Failed to switch graph backend:', err);
+    }
+  };
+
   const handleOpenCitation = (citation: Citation) => {
     setActiveCitation(citation);
     setCurrentTab('evidence');
@@ -95,6 +106,7 @@ export const App: React.FC = () => {
         activeRepoId={activeRepoId}
         onSelectRepo={(id) => setActiveRepoId(id)}
         systemStatus={systemStatus}
+        onSwitchBackend={handleSwitchBackend}
       />
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
@@ -106,6 +118,7 @@ export const App: React.FC = () => {
               activeRepo={activeRepo}
               systemStatus={systemStatus}
               onNavigate={setCurrentTab}
+              onSwitchBackend={handleSwitchBackend}
             />
           )}
 

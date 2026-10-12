@@ -2,6 +2,7 @@ from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, HTTPException, Query
 
 from app.graph import get_graph_store
+from app.graph.redis_store import redis_cache
 from app.services.evidence_service import evidence_service
 from app.schemas.graph import GraphSubgraphResponse, SymbolResponse, PathTraceResponse
 from app.schemas.evidence import SourceSnippetResponse
@@ -16,6 +17,11 @@ def get_repository_graph(
     depth: int = Query(default=2, ge=1, le=4),
     limit: int = Query(default=80, ge=10, le=250)
 ):
+    cache_key = f"subgraph:{repository_id}:{view_mode}:{focus}:{depth}:{limit}"
+    cached = redis_cache.get(cache_key)
+    if cached:
+        return GraphSubgraphResponse(**cached)
+
     store = get_graph_store()
     subgraph = store.get_subgraph(
         repo_id=repository_id,
@@ -24,6 +30,7 @@ def get_repository_graph(
         depth=depth,
         limit=limit
     )
+    redis_cache.set(cache_key, subgraph, ttl_seconds=120)
     return GraphSubgraphResponse(**subgraph)
 
 

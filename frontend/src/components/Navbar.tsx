@@ -7,6 +7,7 @@ interface NavbarProps {
   activeRepoId: string;
   onSelectRepo: (id: string) => void;
   systemStatus: SystemStatus | null;
+  onSwitchBackend?: (backend: string) => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -14,10 +15,35 @@ export const Navbar: React.FC<NavbarProps> = ({
   activeRepoId,
   onSelectRepo,
   systemStatus,
+  onSwitchBackend,
 }) => {
   const activeRepo = repositories.find((r) => r.id === activeRepoId);
-  const isNeo4j = systemStatus?.graph_backend === 'neo4j';
-  const isGraphConnected = systemStatus?.graph_details?.connected ?? false;
+  const currentMode = systemStatus?.selection_mode || 'auto';
+  const rawEngine = systemStatus?.active_engine || systemStatus?.graph_backend || 'Loading';
+
+  const formatEngineName = (name: string) => {
+    if (name.toLowerCase().includes('neo4j')) return 'Neo4j';
+    if (name.toLowerCase().includes('redis')) return 'Redis';
+    if (name.toLowerCase().includes('networkx')) return 'NetworkX';
+    return name;
+  };
+  const activeEngine = formatEngineName(rawEngine);
+
+  const isNeoConnected = systemStatus?.neo4j_connectivity?.connected ?? false;
+  const isRedisConnected = systemStatus?.redis_connectivity?.connected ?? false;
+  const isGraphConnected =
+    currentMode === 'neo4j'
+      ? isNeoConnected
+      : currentMode === 'redis'
+      ? isRedisConnected
+      : isNeoConnected || isRedisConnected || true;
+
+  const getBackendTooltip = () => {
+    if (currentMode === 'auto') {
+      return `Auto Selection: Serving via ${activeEngine}. Neo4j: ${isNeoConnected ? 'Online' : 'Offline'}, Redis Cache: ${isRedisConnected ? 'Active' : 'Offline'}, NetworkX: Ready`;
+    }
+    return `Manual Selection: ${currentMode.toUpperCase()} (Serving via ${activeEngine})`;
+  };
 
   return (
     <header
@@ -98,7 +124,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
       {/* Engine Status Indicators */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-        {/* Graph Backend */}
+        {/* Graph Engine Switcher */}
         <div
           className="glass-panel"
           style={{
@@ -108,17 +134,55 @@ export const Navbar: React.FC<NavbarProps> = ({
             padding: '6px 12px',
             fontSize: '12px',
           }}
-          title={
-            isNeo4j
-              ? `Connected to Neo4j (${systemStatus?.neo4j_connectivity?.message || 'Ready'})`
-              : `Using NetworkX graph engine (${systemStatus?.graph_details?.message || 'Ready'})`
-          }
+          title={getBackendTooltip()}
         >
-          <Database size={14} color={isGraphConnected ? '#10b981' : '#f59e0b'} />
+          <Database size={14} color="#06b6d4" />
           <span style={{ color: 'var(--text-muted)' }}>Graph:</span>
-          <span style={{ fontWeight: 600, color: '#f1f5f9' }}>
-            {systemStatus?.graph_backend.toUpperCase() || 'LOADING'}
+          <select
+            value={currentMode}
+            onChange={(e) => onSwitchBackend && onSwitchBackend(e.target.value)}
+            disabled={!onSwitchBackend}
+            style={{
+              background: 'rgba(255, 255, 255, 0.06)',
+              border: '1px solid rgba(255, 255, 255, 0.15)',
+              color: '#f1f5f9',
+              borderRadius: '6px',
+              padding: '3px 8px',
+              fontSize: '12px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              outline: 'none',
+            }}
+          >
+            <option value="auto" style={{ background: '#121826' }}>
+              Auto (Neo4j / Redis / NX)
+            </option>
+            <option value="neo4j" style={{ background: '#121826' }}>
+              Neo4j
+            </option>
+            <option value="redis" style={{ background: '#121826' }}>
+              Redis
+            </option>
+            <option value="networkx" style={{ background: '#121826' }}>
+              NetworkX
+            </option>
+          </select>
+
+          {/* Active Serving Badge */}
+          <span
+            style={{
+              fontSize: '11px',
+              fontWeight: 600,
+              padding: '2px 7px',
+              borderRadius: '8px',
+              background: currentMode === 'auto' ? 'rgba(6, 182, 212, 0.15)' : 'rgba(99, 102, 241, 0.15)',
+              color: currentMode === 'auto' ? '#38bdf8' : '#a5b4fc',
+              border: `1px solid ${currentMode === 'auto' ? 'rgba(6, 182, 212, 0.3)' : 'rgba(99, 102, 241, 0.3)'}`,
+            }}
+          >
+            {activeEngine}
           </span>
+
           <span
             className="live-dot"
             style={{

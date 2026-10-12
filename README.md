@@ -152,14 +152,19 @@ cp .env.example .env
 ```
 Update `.env` with your settings:
 ```env
-# Graph Storage Backend ("neo4j" or "networkx")
-GRAPH_BACKEND=neo4j
+# Graph Storage Backend Selection ("auto", "neo4j", "redis", or "networkx")
+GRAPH_BACKEND=auto
 
-# Neo4j Settings (if using Neo4j)
+# Neo4j Settings (bolt://localhost:7687)
 NEO4J_URI=bolt://localhost:7687
 NEO4J_USERNAME=neo4j
 NEO4J_PASSWORD=password
 NEO4J_DATABASE=neo4j
+
+# Redis Cache & Graph Store (redis://localhost:6379/0)
+REDIS_URL=redis://localhost:6379/0
+REDIS_CACHE_ENABLED=true
+REDIS_CACHE_TTL_SECONDS=300
 
 # Groq LLM Key (for AI Architecture Assistant)
 GROQ_API_KEY=your_groq_api_key_here
@@ -178,22 +183,30 @@ python -m pip install -r backend/requirements.txt
 npm install --prefix frontend
 ```
 
-### 5. Start Neo4j Database *(Optional)*
-The system works out-of-the-box with its persistent NetworkX engine. To use Neo4j:
+### 5. Start Neo4j & Redis Containers *(Optional)*
+The system works out-of-the-box with its persistent NetworkX engine. To use Neo4j and Redis:
 ```bash
-docker compose up -d neo4j
+docker compose up -d
 python scripts/setup_neo4j.py
 ```
-Neo4j Browser will be available at [http://localhost:7474](http://localhost:7474) (`neo4j` / `password`).
+- **Neo4j Browser**: [http://localhost:7474](http://localhost:7474) (`neo4j` / `password`, Bolt on port `7687`)
+- **Redis Cache & Store**: Port `6379` (`meta-graph-redis`)
 
-### 6. Launch Backend & Frontend Servers
+### 6. Multi-Engine Runtime Switching & UI Selection
+The system provides a seamless **Runtime Multi-Backend Switcher** in both the top Navbar and the Overview Diagnostics Card:
+- **`Auto (Intelligent Routing)`**: Prioritizes Neo4j for persistent Cypher graph operations accelerated by Redis L1 sub-millisecond query caching. If Neo4j is offline, it automatically engages the `RedisNetworkXStore`. If Redis is also offline, it falls back to local in-memory `NetworkXStore` without crashing.
+- **`Neo4j`**: Forces direct Cypher queries against the Neo4j graph cluster.
+- **`Redis`**: Direct Redis-backed NetworkX store and sub-millisecond cache.
+- **`NetworkX`**: Local in-memory / JSON persisted AST graph store.
+
+### 7. Launch Backend & Frontend Servers
 
 **Terminal 1 — Backend (FastAPI)**:
 ```bash
 python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000 --reload
 ```
 - API Docs (Swagger): [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
-- Health Status: [http://127.0.0.1:8000/api/system/status](http://127.0.0.1:8000/api/system/status)
+- Health & Backend Status: [http://127.0.0.1:8000/api/system/status](http://127.0.0.1:8000/api/system/status)
 
 **Terminal 2 — Frontend (React 19 + Vite)**:
 ```bash
@@ -209,10 +222,11 @@ npm run dev --prefix frontend
 ```bash
 pytest backend/tests
 ```
-*All 15 tests cover:*
+*All 18 tests cover:*
 - AST Scanner & symbol parser resilience
 - Class inheritance and cross-file call resolution
-- Dual Graph Store operations (Neo4j & NetworkX)
+- Triple Graph Store operations (Neo4j, Redis Cache & NetworkX Store)
+- Dynamic runtime backend switching (`auto`, `neo4j`, `redis`, `networkx`)
 - LangGraph retrieval workflow and citation validation
 - REST API endpoint security and path traversal guards
 

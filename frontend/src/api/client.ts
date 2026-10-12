@@ -34,6 +34,11 @@ export const api = {
   // Health & System
   getSystemStatus: () => request<SystemStatus>('/system/status'),
   getHealth: () => request<{ status: string }>('/health'),
+  switchGraphBackend: (backend: string) =>
+    request<{ status: string; message: string; system: SystemStatus }>('/system/backend', {
+      method: 'POST',
+      body: JSON.stringify({ backend }),
+    }),
 
   // Repositories
   listRepositories: () => request<Repository[]>('/repositories'),

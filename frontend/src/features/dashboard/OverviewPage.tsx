@@ -19,16 +19,19 @@ interface OverviewPageProps {
   activeRepo: Repository | undefined;
   systemStatus: SystemStatus | null;
   onNavigate: (tab: NavTab) => void;
+  onSwitchBackend?: (backend: string) => void;
 }
 
 export const OverviewPage: React.FC<OverviewPageProps> = ({
   activeRepo,
   systemStatus,
   onNavigate,
+  onSwitchBackend,
 }) => {
   const [stats, setStats] = useState<GraphStatistics | null>(null);
   const [history, setHistory] = useState<QueryHistoryItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [switching, setSwitching] = useState(false);
 
   const fetchStats = async () => {
     if (!activeRepo) return;
@@ -48,6 +51,22 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
   useEffect(() => {
     fetchStats();
   }, [activeRepo?.id]);
+
+  const handleBackendClick = async (mode: string) => {
+    if (!onSwitchBackend || switching) return;
+    setSwitching(true);
+    try {
+      await onSwitchBackend(mode);
+    } finally {
+      setSwitching(false);
+    }
+  };
+
+  const currentMode = systemStatus?.selection_mode || 'auto';
+  const activeEngine = systemStatus?.active_engine || systemStatus?.graph_backend || 'NetworkX';
+  const isNeoConnected = systemStatus?.neo4j_connectivity?.connected ?? false;
+  const isRedisConnected = systemStatus?.redis_connectivity?.connected ?? false;
+  const redisKeys = systemStatus?.redis_connectivity?.cached_keys ?? 0;
 
   return (
     <div style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '28px' }}>
@@ -200,21 +219,82 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
         {/* Graph Engine Status */}
         <div className="glass-panel" style={{ padding: '24px' }}>
-          <h3
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h3
+              style={{
+                fontSize: '16px',
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                margin: 0,
+              }}
+            >
+              <Database size={18} color="#06b6d4" />
+              Graph Storage Diagnostics
+            </h3>
+            <span
+              style={{
+                fontSize: '11px',
+                padding: '2px 8px',
+                borderRadius: '12px',
+                background: currentMode === 'auto' ? 'rgba(6, 182, 212, 0.15)' : 'rgba(99, 102, 241, 0.15)',
+                color: currentMode === 'auto' ? '#38bdf8' : '#a5b4fc',
+                fontWeight: 600,
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+              }}
+            >
+              Mode: {currentMode.toUpperCase()}
+            </span>
+          </div>
+
+          {/* Runtime Backend Switcher Segmented Control */}
+          <div
             style={{
-              fontSize: '16px',
-              fontWeight: 600,
               display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
+              background: 'rgba(255, 255, 255, 0.03)',
+              padding: '4px',
+              borderRadius: '8px',
+              gap: '4px',
               marginBottom: '16px',
+              border: '1px solid var(--border-subtle)',
             }}
           >
-            <Database size={18} color="#06b6d4" />
-            Graph Storage Diagnostics
-          </h3>
+            {[
+              { id: 'auto', label: 'Auto (Intelligent)' },
+              { id: 'neo4j', label: 'Neo4j' },
+              { id: 'redis', label: 'Redis' },
+              { id: 'networkx', label: 'NetworkX' },
+            ].map((btn) => {
+              const isSelected = currentMode === btn.id;
+              return (
+                <button
+                  key={btn.id}
+                  onClick={() => handleBackendClick(btn.id)}
+                  disabled={switching || !onSwitchBackend}
+                  style={{
+                    flex: 1,
+                    padding: '6px 8px',
+                    fontSize: '11px',
+                    fontWeight: isSelected ? 700 : 500,
+                    borderRadius: '6px',
+                    border: 'none',
+                    cursor: switching ? 'wait' : 'pointer',
+                    background: isSelected
+                      ? 'linear-gradient(135deg, rgba(6, 182, 212, 0.25), rgba(99, 102, 241, 0.25))'
+                      : 'transparent',
+                    color: isSelected ? '#38bdf8' : 'var(--text-muted)',
+                    boxShadow: isSelected ? '0 0 8px rgba(6, 182, 212, 0.2)' : 'none',
+                    transition: 'all 0.2s ease',
+                  }}
+                >
+                  {btn.label}
+                </button>
+              );
+            })}
+          </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '13px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px' }}>
             <div
               style={{
                 display: 'flex',
@@ -224,9 +304,9 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
                 borderRadius: '8px',
               }}
             >
-              <span style={{ color: 'var(--text-muted)' }}>Active Storage Backend</span>
+              <span style={{ color: 'var(--text-muted)' }}>Serving Engine</span>
               <span style={{ fontWeight: 600, color: '#38bdf8' }}>
-                {systemStatus?.graph_backend.toUpperCase()}
+                {activeEngine}
               </span>
             </div>
 
@@ -239,14 +319,49 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
                 borderRadius: '8px',
               }}
             >
-              <span style={{ color: 'var(--text-muted)' }}>Neo4j Status</span>
+              <span style={{ color: 'var(--text-muted)' }}>Neo4j Cluster (7687)</span>
               <span
                 style={{
-                  color: systemStatus?.neo4j_connectivity?.connected ? '#34d399' : '#fbbf24',
+                  color: isNeoConnected ? '#34d399' : '#fbbf24',
                   fontWeight: 600,
                 }}
               >
-                {systemStatus?.neo4j_connectivity?.connected ? 'Online (Aura/Local)' : 'Offline (NetworkX Active)'}
+                {isNeoConnected ? 'Online & Synced' : 'Offline (Skipped)'}
+              </span>
+            </div>
+
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                padding: '10px 14px',
+                background: 'rgba(255,255,255,0.03)',
+                borderRadius: '8px',
+              }}
+            >
+              <span style={{ color: 'var(--text-muted)' }}>Redis L1 Cache & Store (6379)</span>
+              <span
+                style={{
+                  color: isRedisConnected ? '#34d399' : '#fbbf24',
+                  fontWeight: 600,
+                }}
+              >
+                {isRedisConnected ? `Connected (${redisKeys} keys cached)` : 'Offline'}
+              </span>
+            </div>
+
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                padding: '10px 14px',
+                background: 'rgba(255,255,255,0.03)',
+                borderRadius: '8px',
+              }}
+            >
+              <span style={{ color: 'var(--text-muted)' }}>NetworkX AST Store</span>
+              <span style={{ color: '#34d399', fontWeight: 600 }}>
+                Ready (MultiDiGraph)
               </span>
             </div>
 

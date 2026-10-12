@@ -125,11 +125,23 @@ export interface SystemStatus {
   status: string;
   version: string;
   graph_backend: string;
-  graph_details: Record<string, any>;
-  neo4j_connectivity: {
+  active_engine?: string;
+  selection_mode?: string;
+  available_backends?: string[];
+  graph_details?: Record<string, any>;
+  neo4j_connectivity?: {
     connected: boolean;
     message?: string;
     troubleshooting?: string;
+  };
+  redis_connectivity?: {
+    connected: boolean;
+    url?: string;
+    cached_keys?: number;
+  };
+  networkx_connectivity?: {
+    connected: boolean;
+    active?: boolean;
   };
   groq_configured: boolean;
   groq_model?: string | null;

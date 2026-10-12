@@ -21,14 +21,19 @@ class Settings(BaseSettings):
     CACHE_DIR: Path = BASE_DIR / "data" / "cache"
 
     # Graph Storage Backend
-    # "neo4j" or "networkx"
-    GRAPH_BACKEND: str = Field(default="neo4j")
+    # Options: "auto" (default: Neo4j if available, fallback to Redis/NetworkX), "neo4j", "networkx", "redis"
+    GRAPH_BACKEND: str = Field(default="auto")
     
     # Neo4j Database
     NEO4J_URI: str = Field(default="bolt://localhost:7687")
     NEO4J_USERNAME: str = Field(default="neo4j")
     NEO4J_PASSWORD: str = Field(default="password")
     NEO4J_DATABASE: str = Field(default="neo4j")
+
+    # Redis Configuration (Cache & Graph Storage)
+    REDIS_URL: str = Field(default="redis://localhost:6379/0")
+    REDIS_CACHE_ENABLED: bool = Field(default=True)
+    REDIS_CACHE_TTL_SECONDS: int = Field(default=300)
 
     # Groq LLM Configuration
     GROQ_API_KEY: Optional[str] = Field(default=None)

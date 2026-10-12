@@ -18,6 +18,16 @@ services:
       - neo4j_logs:/logs
     restart: unless-stopped
 
+  redis:
+    image: redis:7-alpine
+    container_name: meta-graph-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
 volumes:
   neo4j_data:
   neo4j_logs:
+  redis_data:
